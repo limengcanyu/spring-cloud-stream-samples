@@ -1,0 +1,23 @@
+spring.cloud.stream:
+  function.definition: process;sink;receive
+  kafka.streams:
+    binder.configuration:
+      commit.interval.ms: 1000
+      default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      default.value.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+  bindings:
+    process-in-0:
+      destination: words
+    process-out-0:
+      destination: counts
+    sink-in-0:
+      destination: counts
+      binder: kafka
+    sink-out-0:
+      destination: countsInRabbit
+      binder: rabbit
+    receive-in-0:
+      destination: countsInRabbit
+      binder: rabbit
+
+spring.application.name: kafka-streams-to-rabbitmq

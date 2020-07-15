@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,26 +16,27 @@
 
 package kafka.streams.product.tracker;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.cloud.stream.annotation.EnableBinding;
-import org.springframework.cloud.stream.annotation.StreamListener;
-import org.springframework.cloud.stream.binder.kafka.streams.annotations.KafkaStreamsProcessor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.support.serializer.JsonSerde;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.util.StringUtils;
-
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @SpringBootApplication
 public class KafkaStreamsProductTrackerApplication {
@@ -44,24 +45,20 @@ public class KafkaStreamsProductTrackerApplication {
 		SpringApplication.run(KafkaStreamsProductTrackerApplication.class, args);
 	}
 
-	@EnableBinding(KafkaStreamsProcessor.class)
 	@EnableConfigurationProperties(ProductTrackerProperties.class)
 	public static class ProductCountApplication {
 
 		@Autowired
 		ProductTrackerProperties productTrackerProperties;
 
-		@Autowired
-		TimeWindows timeWindows;
-
-		@StreamListener("input")
-		@SendTo("output")
-		public KStream<Integer, ProductStatus> process(KStream<Object, Product> input) {
-			return input
+		@Bean
+		public Function<KStream<Object, Product>, KStream<Integer, ProductStatus>> process() {
+			return input -> input
 					.filter((key, product) -> productIds().contains(product.getId()))
 					.map((key, value) -> new KeyValue<>(value, value))
-					.groupByKey(new JsonSerde<>(Product.class), new JsonSerde<>(Product.class))
-					.count(timeWindows, "product-counts")
+					.groupByKey(Grouped.with(new JsonSerde<>(Product.class), new JsonSerde<>(Product.class)))
+					.windowedBy(TimeWindows.of(Duration.ofSeconds(60)))
+					.count(Materialized.as("product-counts"))
 					.toStream()
 					.map((key, value) -> new KeyValue<>(key.key().id, new ProductStatus(key.key().id,
 							value, Instant.ofEpochMilli(key.window().start()).atZone(ZoneId.systemDefault()).toLocalTime(),

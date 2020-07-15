@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,33 +16,36 @@
 
 package org.springframework.cloud.stream.testing.processor;
 
-import org.hamcrest.Matcher;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.SpyBean;
-import org.springframework.cloud.stream.messaging.Processor;
-import org.springframework.cloud.stream.test.binder.MessageCollector;
-import org.springframework.integration.support.MessageBuilder;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.SubscribableChannel;
-import org.springframework.messaging.support.GenericMessage;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.junit4.SpringRunner;
-
-import java.util.concurrent.BlockingQueue;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.springframework.cloud.stream.test.matcher.MessageQueueMatcher.receivesMessageThat;
 import static org.springframework.cloud.stream.test.matcher.MessageQueueMatcher.receivesPayloadThat;
 import static org.springframework.integration.test.matcher.PayloadAndHeaderMatcher.sameExceptIgnorableHeaders;
+
+import java.util.concurrent.BlockingQueue;
+
+import org.hamcrest.Matcher;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.actuate.autoconfigure.metrics.KafkaMetricsAutoConfiguration;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
+import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.stream.test.binder.MessageCollector;
+import org.springframework.http.MediaType;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.support.GenericMessage;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.util.MimeType;
 
 /**
  * The Spring Boot-base test-case to demonstrate how can we test Spring Cloud Stream applications
@@ -51,41 +54,45 @@ import static org.springframework.integration.test.matcher.PayloadAndHeaderMatch
  * @author Artem Bilan
  *
  */
-@RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ImportAutoConfiguration(exclude = {
+		KafkaAutoConfiguration.class,
+		KafkaMetricsAutoConfiguration.class,
+		DataSourceAutoConfiguration.class,
+		TransactionAutoConfiguration.class,
+		DataSourceTransactionManagerAutoConfiguration.class })
 @DirtiesContext
-@Ignore
-public class ToUpperCaseProcessorTests {
+class ToUpperCaseProcessorTests {
 
 	@Autowired
-	private Processor channels;
+	@Qualifier("uppercaseFunction-in-0")
+	private MessageChannel input;
+
+	@Autowired
+	@Qualifier("uppercaseFunction-out-0")
+	private MessageChannel output;
 
 	@Autowired
 	private MessageCollector collector;
 
-	@SpyBean
-	private ToUpperCaseProcessor toUpperCaseProcessor;
-
 	@Test
 	@SuppressWarnings("unchecked")
-	public void testMessages() {
-		SubscribableChannel input = this.channels.input();
+	void testMessages() {
+		this.input.send(new GenericMessage<>("odd"));
+		this.input.send(new GenericMessage<>("even"));
+		this.input.send(new GenericMessage<>("odd meets even"));
+		this.input.send(new GenericMessage<>("nothing but the best test"));
 
-		input.send(new GenericMessage<>("foo"));
-		input.send(new GenericMessage<>("bar"));
-		input.send(new GenericMessage<>("foo meets bar"));
-		input.send(new GenericMessage<>("nothing but the best test"));
+		BlockingQueue<Message<?>> messages = this.collector.forChannel(this.output);
 
-		BlockingQueue<Message<?>> messages = this.collector.forChannel(channels.output());
-
-		assertThat(messages, receivesPayloadThat(is("FOO")));
-		assertThat(messages, receivesPayloadThat(is("BAR")));
-		assertThat(messages, receivesPayloadThat(is("FOO MEETS BAR")));
+		assertThat(messages, receivesPayloadThat(is("ODD")));
+		assertThat(messages, receivesPayloadThat(is("EVEN")));
+		assertThat(messages, receivesPayloadThat(is("ODD MEETS EVEN")));
 		assertThat(messages, receivesPayloadThat(not("nothing but the best test")));
 
 		Message<String> testMessage =
 				MessageBuilder.withPayload("headers")
-						.setHeader("foo", "bar")
+						.setHeader("odd", "even")
 						.build();
 
 		input.send(testMessage);
@@ -93,14 +100,13 @@ public class ToUpperCaseProcessorTests {
 		Message<String> expected =
 				MessageBuilder.withPayload("HEADERS")
 						.copyHeaders(testMessage.getHeaders())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON)
 						.build();
 
 		Matcher<Message<Object>> sameExceptIgnorableHeaders =
 				(Matcher<Message<Object>>) (Matcher<?>) sameExceptIgnorableHeaders(expected);
 
 		assertThat(messages, receivesMessageThat(sameExceptIgnorableHeaders));
-
-		verify(this.toUpperCaseProcessor, times(5)).transform(anyString());
 	}
 
 }

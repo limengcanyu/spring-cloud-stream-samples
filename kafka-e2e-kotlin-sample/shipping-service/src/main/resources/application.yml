@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: shipping-service
+  cloud:
+    stream:
+      kafka:
+        streams:
+          binder:
+            configuration:
+              application:
+                id: shipping-service
+              schema:
+                registry:
+                  url: http://localhost:8081
+              value:
+                subject:
+                  name:
+                    strategy: io.confluent.kafka.serializers.subject.RecordNameStrategy
+          bindings:
+            input:
+              consumer:
+                valueSerde: io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
+            order:
+              consumer:
+                valueSerde: io.confluent.kafka.streams.serdes.avro.GenericAvroSerde
+            output:
+              producer:
+                valueSerde: io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde
+      bindings:
+        input:
+          destination: customer
+        order:
+          destination: order
+        output:
+          destination: order
+
+server:
+  port: 8086
+
+logging:
+  level:
+    org.springframework.kafka.config: debug

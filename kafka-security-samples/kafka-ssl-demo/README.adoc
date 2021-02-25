@@ -264,7 +264,7 @@ $ keytool \
 
 Verify you see both CA and client certificate entries in the key store.
 ```
-keytool -list -v -keystore jacek.keystore -storepass 123456
+keytool -list -v -keystore ssldemo.keystore -storepass 123456
 ```
 
 ### Import CA Certificate to Client Truststore
@@ -287,9 +287,9 @@ Create a file called `ssldemo-client.properties` and add the following contents.
 
 ```
 security.protocol=SSL
-ssl.truststore.location=/Users/sobychacko/kafka-ssl/client.truststore
+ssl.truststore.location=/tmp/kafka-ssl-demo/client.truststore
 ssl.truststore.password=123456
-ssl.keystore.location=/Users/sobychacko/kafka-ssl/jacek.keystore
+ssl.keystore.location=/tmp/kafka-ssl-demo/ssldemo.keystore
 ssl.keystore.password=123456
 ssl.key.password=123456
 ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1
@@ -315,6 +315,8 @@ You should be able to connect to Kafka broker for both producer and consumer suc
 ### Running Spring Cloud Stream Application against this secured Kafka using SSL
 
 Build this application.
+
+Before building, move the certificate files to `src/main/resources` folder so that they are available on the classpath.
 
 ```
 ./mvnw clean package
